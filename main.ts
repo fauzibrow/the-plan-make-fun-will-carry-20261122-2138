@@ -1,20 +1,17 @@
-// Entry program for the make.fun plan bounty
-// (the-plan-make-fun-will-carry-20261122-2138).
+// The judged plan for make.fun bounty the-plan-make-fun-will-carry-20261122-2138.
 //
-// The judged entry is the short plan below: a concrete way for an AI
-// agent, starting with $100 and 30 days, to end up with the most money
-// it most likely can — selling a $49 AI missed-call text-back setup to
-// US plumbers found on Google Maps, at $49 setup plus $29 a month.
-// The plan names the buyers, where to find them, the price, what day
-// one looks like, a realistic expected outcome (~$390 plus recurring
-// from about 8 clients), and the edge: only an agent can send 200
-// pitches and build each setup in minutes. No trading, no crypto,
-// no luck, no human in the loop.
+// The brief: an AI agent starts with $100 and 30 days and has to finish
+// with as much money as it most likely can. This entry is the plan it
+// would carry: sell a $49 AI missed-call text-back setup to US plumbers
+// found on Google Maps — $49 setup + $29/mo, about 8 clients, roughly
+// $390 plus recurring revenue. The edge is scale only an agent has:
+// it can send 200 pitches and build each setup in minutes. No trading,
+// no crypto, no luck, no human in the loop.
 //
-// This program writes that plan to entry.txt in the output directory
-// ($MAKEFUN_OUTPUT_DIR, default /output), checks it against the gate
-// (UTF-8 text, 1 to 280 Unicode code points, not only whitespace),
-// then re-reads the file to prove the write landed byte for byte.
+// This file keeps the plan as one line and drops it into entry.txt in
+// the output directory. It refuses to write a plan that breaks the
+// gate (1–280 Unicode code points, not only whitespace), then reads
+// the file back to prove the write landed byte for byte.
 //
 // Local test:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
@@ -23,111 +20,110 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The plan, exactly as judged. Keep it on one line: the gate counts
-// every character, so any extra line break would count against the
-// 280 code point cap.
-const PLAN =
-  "Day 1: $12 domain + Twilio number. Find 200 US plumbers on Google " +
-  "Maps, no booking page; pitch a $49 AI missed-call text-back that " +
-  "replies and books jobs. $49 setup + $29/mo. Expect ~8 clients " +
-  "≈ $390 + recurring. Edge: an agent alone sends 200 pitches and " +
-  "builds each in minutes.";
+const JUDGED_PLAN =
+  "Day 1: $12 domain + Twilio number. Find 200 US plumbers on Google Maps, no booking page; pitch a $49 AI missed-call text-back that replies and books jobs. $49 setup + $29/mo. Expect ~8 clients ≈ $390 + recurring. Edge: an agent alone sends 200 pitches and builds each in minutes.";
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-const targetPath = join(outDir, "entry.txt");
+const CAP = 280;
 
-// Distinct exit codes, so a caller can tell why a run failed without
-// parsing stderr:
-//   1  gate failure on the plan itself (length / whitespace / write)
-//   2  --verify: no entry.txt to check yet
-//   3  --verify: entry.txt differs from the plan
-//   4  --verify: entry.txt breaks the 1-280 code point cap
-//   5  --verify: entry.txt is only whitespace
-const EXIT_GATE = 1;
-const EXIT_VERIFY_MISSING = 2;
-const EXIT_VERIFY_MISMATCH = 3;
-const EXIT_VERIFY_LENGTH = 4;
-const EXIT_VERIFY_WHITESPACE = 5;
-const EXIT_SHAPE = 6;
+function codePointCount(text: string): number {
+  return [...text].length;
+}
 
-// Shape check: the gate counts every character, so invisible junk in
-// the plan silently eats the 280 code point budget or breaks the
-// one-line entry. Reject leading/trailing whitespace, any control
-// character (newline, tab, carriage return), and accidental double
-// spaces. Returns a reason string, or null when the text is clean.
-function checkPlanShape(text: string): string | null {
-  if (text !== text.trim()) return "leading or trailing whitespace";
-  if (/[\u0000-\u001f\u007f]/.test(text)) return "a control character";
-  if (text.includes("  ")) return "a double space";
+function sha256Hex(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+// Returns a human-readable reason when the plan breaks the gate,
+// or null when it passes.
+function gateProblem(text: string): string | null {
+  const points = codePointCount(text);
+  if (points < 1) return "empty plan";
+  if (points > CAP) return `plan is ${points} code points, over the ${CAP} cap`;
+  if (text.trim().length === 0) return "plan is whitespace only";
+  const shape = shapeProblem(text);
+  if (shape !== null) return shape;
   return null;
 }
 
-// --verify mode: do NOT rewrite anything. Read the entry.txt already
-// in the output directory and check it against the plan: same bytes,
-// within the 1-280 code point cap, not only whitespace. This lets a
-// fresh checkout prove the committed artifact is the judged plan
-// without touching it.
-if (process.argv.includes("--verify")) {
-  let existing: string;
+// Catches invisible budget-eaters: leading/trailing whitespace,
+// control characters (newline, tab, CR, ...), and double spaces.
+function shapeProblem(text: string): string | null {
+  if (text !== text.trim()) return "leading or trailing whitespace";
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) {
+      return `control character U+${code.toString(16).padStart(4, "0")}`;
+    }
+  }
+  if (text.includes("  ")) return "double space";
+  return null;
+}
+
+// --verify: prove a checkout's entry.txt holds the judged plan
+// without touching it. Exit codes: 0 match, 2 file missing,
+// 3 content differs, 4 length outside the cap, 5 whitespace only,
+// 6 shape problem.
+function verifyEntry(target: string): number {
+  let onDisk: Buffer;
   try {
-    existing = readFileSync(targetPath, "utf8");
+    onDisk = readFileSync(target);
   } catch {
-    console.error(`--verify: ${targetPath} does not exist yet; run without --verify first`);
-    process.exit(EXIT_VERIFY_MISSING);
+    console.error(`verify failed: no entry at ${target}`);
+    return 2;
   }
-  if (existing !== PLAN) {
-    console.error(`--verify: ${targetPath} differs from the plan`);
-    process.exit(EXIT_VERIFY_MISMATCH);
+  const text = onDisk.toString("utf8");
+  const points = codePointCount(text);
+  if (points < 1 || points > CAP) {
+    console.error(`verify failed: entry is ${points} code points, cap is ${CAP}`);
+    return 4;
   }
-  const existingPoints = [...existing].length;
-  const existingShape = checkPlanShape(existing);
-  if (existingShape !== null) {
-    console.error(`--verify: entry has ${existingShape}`);
-    process.exit(EXIT_SHAPE);
+  if (text.trim().length === 0) {
+    console.error("verify failed: entry is whitespace only");
+    return 5;
   }
-  if (existingPoints < 1 || existingPoints > 280) {
-    console.error(`--verify: entry is ${existingPoints} code points, outside the 1-280 cap`);
-    process.exit(EXIT_VERIFY_LENGTH);
+  if (!onDisk.equals(Buffer.from(JUDGED_PLAN, "utf8"))) {
+    console.error(`verify failed: ${target} does not match the plan`);
+    return 3;
   }
-  if (existing.trim().length === 0) {
-    console.error("--verify: entry is only whitespace");
-    process.exit(EXIT_VERIFY_WHITESPACE);
+  const shape = shapeProblem(text);
+  if (shape !== null) {
+    console.error(`verify failed: ${shape}`);
+    return 6;
   }
-  const existingSha = createHash("sha256").update(existing, "utf8").digest("hex");
   console.log(
-    `verify OK: ${targetPath} (${existingPoints} code points, ` +
-      `${Buffer.byteLength(existing, "utf8")} bytes, sha256 ${existingSha})`,
+    `verify OK: ${target} — ${points} code points, ${onDisk.length} bytes, sha256 ${sha256Hex(onDisk)}`,
   );
-  process.exit(0);
+  return 0;
 }
 
-const codePoints = [...PLAN].length;
-const shapeProblem = checkPlanShape(PLAN);
-if (shapeProblem !== null) {
-  console.error(`plan has ${shapeProblem}`);
-  process.exit(EXIT_SHAPE);
-}
-if (codePoints < 1 || codePoints > 280) {
-  console.error(`plan is ${codePoints} code points, outside the 1-280 cap`);
-  process.exit(1);
-}
-if (PLAN.trim().length === 0) {
-  console.error("plan is only whitespace");
-  process.exit(1);
+function main(): number {
+  if (process.argv.includes("--verify")) {
+    const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+    return verifyEntry(join(outDir, "entry.txt"));
+  }
+
+  const problem = gateProblem(JUDGED_PLAN);
+  if (problem !== null) {
+    console.error(`gate failed: ${problem}`);
+    return 1;
+  }
+
+  const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+  mkdirSync(outDir, { recursive: true });
+  const target = join(outDir, "entry.txt");
+  const payload = Buffer.from(JUDGED_PLAN, "utf8");
+  writeFileSync(target, payload);
+
+  const roundTrip = readFileSync(target);
+  if (!roundTrip.equals(payload)) {
+    console.error(`write check failed: ${target} does not match the plan`);
+    return 1;
+  }
+
+  console.log(
+    `entry written: ${target} — ${codePointCount(JUDGED_PLAN)} code points, ${payload.length} bytes, sha256 ${sha256Hex(payload)}`,
+  );
+  return 0;
 }
 
-mkdirSync(outDir, { recursive: true });
-writeFileSync(targetPath, PLAN, "utf8");
-
-// Re-read the file and compare it with the plan before reporting
-// success, so a failed or partial write can never pass silently.
-const written = readFileSync(targetPath, "utf8");
-if (written !== PLAN) {
-  console.error(`${targetPath} differs from the plan after writing`);
-  process.exit(1);
-}
-const sha256 = createHash("sha256").update(written, "utf8").digest("hex");
-console.log(
-  `wrote ${targetPath} (${codePoints} code points, ` +
-    `${Buffer.byteLength(written, "utf8")} bytes, sha256 ${sha256})`,
-);
+process.exit(main());
