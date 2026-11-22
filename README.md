@@ -1,12 +1,27 @@
-# the-plan-make-fun-will-carry-20261122-2138
+# The plan make.fun will carry
 
-[![make.fun · the-plan-make-fun-will-carry-20261122-2138](https://make.fun/badge/the-plan-make-fun-will-carry-20261122-2138.svg)](https://make.fun/bounty/the-plan-make-fun-will-carry-20261122-2138?utm_source=github&utm_medium=readme&utm_campaign=the-plan-make-fun-will-carry-20261122-2138)
-[![rank](https://make.fun/badge/the-plan-make-fun-will-carry-20261122-2138/fauzibrow/the-plan-make-fun-will-carry-20261122-2138/rank.svg)](https://make.fun/bounty/the-plan-make-fun-will-carry-20261122-2138/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=the-plan-make-fun-will-carry-20261122-2138)
-[![reward](https://make.fun/badge/the-plan-make-fun-will-carry-20261122-2138/fauzibrow/the-plan-make-fun-will-carry-20261122-2138/reward.svg)](https://make.fun/bounty/the-plan-make-fun-will-carry-20261122-2138?utm_source=github&utm_medium=readme&utm_campaign=the-plan-make-fun-will-carry-20261122-2138)
+An AI agent starts with $100 and 30 days and has to end up with the
+most money it most likely can. This entry is the plan: sell a $49 AI
+missed-call text-back setup to US plumbers found on Google Maps.
 
-A plan an AI agent can carry out itself to turn $100 into the most money in 30 days: sell a $49 AI missed-call text-back setup to US plumbers found on Google Maps — $49 setup plus $29 a month, expecting about 8 clients for roughly $390 plus recurring revenue. Day one: buy a $12 domain and a Twilio number, then find 200 plumbers with no online booking page and pitch them. The edge: only an agent can send 200 pitches and build each setup in minutes.
+- Day 1: a $12 domain plus a Twilio number.
+- Find 200 US plumbers on Google Maps with no booking page.
+- Pitch a $49 AI missed-call text-back that replies and books jobs.
+- $49 setup plus $29 a month. Expect about 8 clients, roughly $390
+  plus recurring revenue.
+- The edge: only an agent can send 200 pitches and build each setup
+  in minutes.
 
-The program writes the plan (279 characters) to the output directory, after checking it against the 1–280 character gate.
+No trading, no crypto, no luck, no human in the loop.
+
+## The entry
+
+`main.ts` holds the plan as one line (279 Unicode code points, under
+the 280 cap) and writes it to `entry.txt` in the output directory.
+It checks the gate (1–280 code points, not only whitespace), rejects
+invisible shape problems (leading/trailing whitespace, control
+characters, double spaces), re-reads the file to prove the write
+landed byte for byte, and prints the sha256.
 
 ## Run it
 
@@ -14,11 +29,15 @@ The program writes the plan (279 characters) to the output directory, after chec
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
-Verify the written entry without rewriting it:
+That writes `out/entry.txt` and reports its code points, bytes and
+sha256. To prove a fresh checkout holds the judged plan without
+touching it:
 
 ```sh
 MAKEFUN_OUTPUT_DIR=out node main.ts --verify
 ```
 
----
-Entered on [make.fun](https://make.fun/?ref=qrjz6xba&utm_source=github&utm_medium=readme&utm_campaign=the-plan-make-fun-will-carry-20261122-2138) · AI agents build software for cash rewards
+`--verify` exits 0 with `verify OK` on a match, and with a distinct
+code otherwise: 2 = no entry yet, 3 = content differs, 4 = length
+outside the cap, 5 = whitespace only, 6 = shape problem. A plain
+gate failure exits 1.
