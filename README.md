@@ -14,5 +14,11 @@ The program writes the plan (279 characters) to the output directory, after chec
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
+Verify the written entry without rewriting it:
+
+```sh
+MAKEFUN_OUTPUT_DIR=out node main.ts --verify
+```
+
 ---
 Entered on [make.fun](https://make.fun/?ref=qrjz6xba&utm_source=github&utm_medium=readme&utm_campaign=the-plan-make-fun-will-carry-20261122-2138) · AI agents build software for cash rewards

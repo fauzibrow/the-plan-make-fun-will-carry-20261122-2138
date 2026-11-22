@@ -36,9 +36,77 @@ const PLAN =
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 const targetPath = join(outDir, "entry.txt");
 
-// Count Unicode code points (not bytes, not UTF-16 units): spreading
-// the string iterates code points, so astral characters count once.
+// Distinct exit codes, so a caller can tell why a run failed without
+// parsing stderr:
+//   1  gate failure on the plan itself (length / whitespace / write)
+//   2  --verify: no entry.txt to check yet
+//   3  --verify: entry.txt differs from the plan
+//   4  --verify: entry.txt breaks the 1-280 code point cap
+//   5  --verify: entry.txt is only whitespace
+const EXIT_GATE = 1;
+const EXIT_VERIFY_MISSING = 2;
+const EXIT_VERIFY_MISMATCH = 3;
+const EXIT_VERIFY_LENGTH = 4;
+const EXIT_VERIFY_WHITESPACE = 5;
+const EXIT_SHAPE = 6;
+
+// Shape check: the gate counts every character, so invisible junk in
+// the plan silently eats the 280 code point budget or breaks the
+// one-line entry. Reject leading/trailing whitespace, any control
+// character (newline, tab, carriage return), and accidental double
+// spaces. Returns a reason string, or null when the text is clean.
+function checkPlanShape(text: string): string | null {
+  if (text !== text.trim()) return "leading or trailing whitespace";
+  if (/[\u0000-\u001f\u007f]/.test(text)) return "a control character";
+  if (text.includes("  ")) return "a double space";
+  return null;
+}
+
+// --verify mode: do NOT rewrite anything. Read the entry.txt already
+// in the output directory and check it against the plan: same bytes,
+// within the 1-280 code point cap, not only whitespace. This lets a
+// fresh checkout prove the committed artifact is the judged plan
+// without touching it.
+if (process.argv.includes("--verify")) {
+  let existing: string;
+  try {
+    existing = readFileSync(targetPath, "utf8");
+  } catch {
+    console.error(`--verify: ${targetPath} does not exist yet; run without --verify first`);
+    process.exit(EXIT_VERIFY_MISSING);
+  }
+  if (existing !== PLAN) {
+    console.error(`--verify: ${targetPath} differs from the plan`);
+    process.exit(EXIT_VERIFY_MISMATCH);
+  }
+  const existingPoints = [...existing].length;
+  const existingShape = checkPlanShape(existing);
+  if (existingShape !== null) {
+    console.error(`--verify: entry has ${existingShape}`);
+    process.exit(EXIT_SHAPE);
+  }
+  if (existingPoints < 1 || existingPoints > 280) {
+    console.error(`--verify: entry is ${existingPoints} code points, outside the 1-280 cap`);
+    process.exit(EXIT_VERIFY_LENGTH);
+  }
+  if (existing.trim().length === 0) {
+    console.error("--verify: entry is only whitespace");
+    process.exit(EXIT_VERIFY_WHITESPACE);
+  }
+  const existingSha = createHash("sha256").update(existing, "utf8").digest("hex");
+  console.log(
+    `verify OK: ${targetPath} (${existingPoints} code points, ` +
+      `${Buffer.byteLength(existing, "utf8")} bytes, sha256 ${existingSha})`,
+  );
+  process.exit(0);
+}
+
 const codePoints = [...PLAN].length;
+const shapeProblem = checkPlanShape(PLAN);
+if (shapeProblem !== null) {
+  console.error(`plan has ${shapeProblem}`);
+  process.exit(EXIT_SHAPE);
+}
 if (codePoints < 1 || codePoints > 280) {
   console.error(`plan is ${codePoints} code points, outside the 1-280 cap`);
   process.exit(1);
